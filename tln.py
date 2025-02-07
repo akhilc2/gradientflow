@@ -3,6 +3,7 @@ from scipy.linalg import expm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from pathos.multiprocessing import ProcessPool
 from numba import njit, jit
+import pandas as pd
 import gc
 #computing all the wavevectors first
 
@@ -52,9 +53,6 @@ def Clover(n, mu, nu):
 def gauge_fix(n, mu, nu, alpha):
     G = (p_hat(n)[mu]*p_hat(n)[nu])/alpha
     return G
-
-action = np.vectorize(Action, otypes= [np.ndarray], signature="(n),(),(),()->()") #Doing this vectorization doesnt really work well. Probably because of how im implementing it
-g = np.vectorize(gauge_fix, otypes= [np.ndarray], signature="(n),(),(),()->()")
 
 def create_LatSites(indices, cf, cg, ce):
     alpha = 1
@@ -130,7 +128,7 @@ def tln_batch_parallel(flowtimes, Sf_plus_G, Inv, Se, num_batches = 4):
     return final_output
 
 
-def compute_tln(Ns, Nt, flow ="W", action = "W", operator = "W"):
+def compute_tln(Ns, Nt, flow ="W", action = "W", operator = "W", save = True):
     eps = 0.01
     n_t = int(np.ceil(Ns**2 / 32 / eps) + 1)  # number of flow times
     flowtimes = np.arange(n_t)* eps
@@ -152,15 +150,23 @@ def compute_tln(Ns, Nt, flow ="W", action = "W", operator = "W"):
     
     S_plus_G, Inv, Se = create_lattice_parallel(indices, cf, cg, ce, num_batches= Nt//2)
     tln = tln_batch_parallel(flowtimes, S_plus_G, Inv, Se, num_batches= Nt//2)
+    
+    print("Finished computing tln")
+    
+    if save == True:    
+        df = pd.DataFrame({"flowtimes": flowtimes, "tln": tln})
+        filename = f"{flow}_{action}_{operator}_{Ns}_{Nt}.csv"
+        df.to_csv("output.csv", index=False)
+        df.to_csv(filename, index=False)
+        print(f"Saved as {filename}")
 
     #Then we compute all of our matrices using the above function
         
     return tln
 
 #Run this cell
-Ns, Nt = 16,16
+Ns, Nt = 8,8
 flow, action, operator = 'W', 'S', 'C'
 lattice, indices = wave_vectors(Ns,Nt)
 
-#Tested everything and its correct!
-compute_tln(Ns, Nt, flow=flow, operator=operator,action=action)
+compute_tln(Ns, Nt, flow=flow, operator=operator,action=action, save = True)
